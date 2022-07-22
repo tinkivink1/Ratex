@@ -8,7 +8,7 @@ using System.Linq;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Threading.Tasks;
 
-const int DGRAM_DATA_SIZE = 32768;
+const int DGRAM_DATA_SIZE = 16552;
 
 string IP = "127.0.0.1";
 int tcpPort = 44445;
@@ -70,15 +70,18 @@ if (!tcpClient.Connected)
 
 var tcpStream = tcpClient.GetStream();
 var serializedBaseInfo = Serialize<BaseInfo>(baseInfo);
-tcpStream.Write(serializedBaseInfo);
-// Отправка файла
-// File sending
-data = ReadFile(filename);
-Console.WriteLine(Math.Floor((double)data.Length / DGRAM_DATA_SIZE));
-
 byte[] serializedDatagram;
 byte[] buffer = new byte[DGRAM_DATA_SIZE];
-for (int i = 0; i < Math.Floor((double)data.Length / DGRAM_DATA_SIZE) - 1; i++)
+
+tcpStream.Write(serializedBaseInfo);
+tcpStream.Read(buffer, 0, buffer.Length);
+// Отправка файла
+// File sending
+data = File.ReadAllBytes(filename); ;
+Console.WriteLine(Math.Floor((double)data.Length / DGRAM_DATA_SIZE));
+Console.WriteLine(Encoding.UTF8.GetString(buffer));
+
+for (int i = 0; i < Math.Ceiling((double)data.Length / DGRAM_DATA_SIZE); i++)
 {
     markdgram = new MarkedDatagram(i, data
                                         .Skip(i * DGRAM_DATA_SIZE)
@@ -86,24 +89,18 @@ for (int i = 0; i < Math.Floor((double)data.Length / DGRAM_DATA_SIZE) - 1; i++)
                                         .ToArray());
     serializedDatagram = Serialize<MarkedDatagram>(markdgram);
     udpClient.Send(serializedDatagram, serializedDatagram.Length);
-    //tcpStream.Read(buffer, 0, buffer.Length);
-    //Console.WriteLine($"id:{BitConverter.ToInt32(buffer)}");
-    //Console.WriteLine(i);
     Task<bool> sendingConfirmation = Task.Run(() => SendingConfirmation(i));
-    //tcpStream.Read(buffer, 0, buffer.Length);
 
     sendingConfirmation.Wait();
     Console.WriteLine(sendingConfirmation.Result);
     if (!sendingConfirmation.Wait(responeTime))
     {
         i--;
-        Console.WriteLine(i);
         continue;
     }
     if (!sendingConfirmation.Result)
     {
         i--;
-        Console.WriteLine("32123");
         continue;
     }
 }
@@ -122,12 +119,6 @@ bool SendingConfirmation(int i)
     else
         return false;
 }
-
-byte[] ReadFile(string filename)
-{
-    return Encoding.UTF8.GetBytes(File.ReadAllText(filename));
-}
-
 
 static byte[] Serialize<T>(T data)
     where T : struct

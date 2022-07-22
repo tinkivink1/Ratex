@@ -5,7 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-const int DGRAM_DATA_SIZE = 32768;
+const int DGRAM_DATA_SIZE = 16552;
 
 string IP = "127.0.0.1";
 int tcpPort = 44445;
@@ -59,22 +59,24 @@ while (true)
     // парсинг полученных данных (в формате json для удобства)
     filename = JsonSerializer.Deserialize<BaseInfo>(data).filename;
     udpPort = JsonSerializer.Deserialize<BaseInfo>(data).udpPort;
+    stream.Write(Encoding.UTF8.GetBytes($"Server received filename: {filename} and UDP port: {udpPort}"));
 
     // Конечная точка и подключение
     IPEndPoint endPoint = new IPEndPoint(IPAddress.Any, 0);
     UdpClient udpClient = new UdpClient(udpPort);
-    var file = File.Open(filename, FileMode.Append);
-    stream.Write(BitConverter.GetBytes(123));
+    var file = File.Open(filename, FileMode.Truncate);
 
     while ((buffer = udpClient.Receive(ref endPoint)).Length != 0)
     {
-        MarkedDatagram markedOne = JsonSerializer.Deserialize<MarkedDatagram>(Deserialize(buffer));
+        MarkedDatagram markedOne = JsonSerializer.Deserialize<MarkedDatagram>(buffer);
         //Console.WriteLine(DecodeBase64(markedOne.data));
         Console.WriteLine(markedOne.id);
         stream.Write(BitConverter.GetBytes(markedOne.id));
         //stream.Write(BitConverter.GetBytes(123));
-        file.Write(Encoding.UTF8.GetBytes(DecodeBase64(markedOne.data)));
+        file.Write(markedOne.data);
     }
+
+    //File.WriteAllBytes(filename, markedOne.data);
     file.Close();
     try
     {
@@ -100,23 +102,12 @@ while (true)
     return 0;
 }
 
-string Deserialize(byte[] data)
-{
-    return Encoding.UTF8.GetString(data);
-}
-
-string DecodeBase64(string value)
-{
-    var valueBytes = Convert.FromBase64String(value);
-    return Encoding.UTF8.GetString(valueBytes);
-}
-
 struct MarkedDatagram
 {
     public int id { get; set; }
-    public string data { get; set; }
+    public byte[]? data { get; set; }
 
-    public MarkedDatagram(int id, string data)
+    public MarkedDatagram(int id, byte[] data)
     {
         this.id = id;
         this.data = data;
