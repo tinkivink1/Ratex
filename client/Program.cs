@@ -13,8 +13,8 @@ const int DGRAM_DATA_SIZE = 32768;
 string IP = "127.0.0.1";
 int tcpPort = 44445;
 int udpPort = 44444;
-string filename = "Test_File.txt";
-int timeout = 500;
+string filename = "megamozg.png";
+int timeout = 5000;
 // Данные из файла 
 // File data 
 byte[] data;
@@ -73,11 +73,11 @@ var serializedBaseInfo = Serialize<BaseInfo>(baseInfo);
 tcpStream.Write(serializedBaseInfo);
 // Отправка файла
 // File sending
-tcpStream.Close();
 data = ReadFile(filename);
 Console.WriteLine(Math.Floor((double)data.Length / DGRAM_DATA_SIZE));
 
 byte[] serializedDatagram;
+byte[] buffer = new byte[DGRAM_DATA_SIZE];
 for (int i = 0; i < Math.Floor((double)data.Length / DGRAM_DATA_SIZE) - 1; i++)
 {
     markdgram = new MarkedDatagram(i, data
@@ -86,28 +86,37 @@ for (int i = 0; i < Math.Floor((double)data.Length / DGRAM_DATA_SIZE) - 1; i++)
                                         .ToArray());
     serializedDatagram = Serialize<MarkedDatagram>(markdgram);
     udpClient.Send(serializedDatagram, serializedDatagram.Length);
+    //tcpStream.Read(buffer, 0, buffer.Length);
+    //Console.WriteLine($"id:{BitConverter.ToInt32(buffer)}");
+    //Console.WriteLine(i);
+    Task<bool> sendingConfirmation = Task.Run(() => SendingConfirmation(i));
+    //tcpStream.Read(buffer, 0, buffer.Length);
 
-    //Task<bool> sendingConfirmation = Task.Run(() => SendingConfirmation(i));
-    //if (!sendingConfirmation.Wait(responeTime))
-    //{
-    //    i--;
-    //    Console.WriteLine("12321");
-    //    continue;
-    //}
-    //if (!sendingConfirmation.Result)
-    //{
-    //    i--;
-    //    Console.WriteLine("32123");
-    //    continue;
-    //}
+    sendingConfirmation.Wait();
+    Console.WriteLine(sendingConfirmation.Result);
+    if (!sendingConfirmation.Wait(responeTime))
+    {
+        i--;
+        Console.WriteLine(i);
+        continue;
+    }
+    if (!sendingConfirmation.Result)
+    {
+        i--;
+        Console.WriteLine("32123");
+        continue;
+    }
 }
 
+tcpStream.Close();
+tcpClient.Close();
 return 0;
 
 bool SendingConfirmation(int i)
 {
     byte[] buffer = new byte[DGRAM_DATA_SIZE];
     tcpStream.Read(buffer, 0, buffer.Length);
+    Console.WriteLine($"id:{BitConverter.ToInt32(buffer)}");
     if (BitConverter.ToInt32(buffer) == i)
         return true;
     else
@@ -121,12 +130,12 @@ byte[] ReadFile(string filename)
 
 
 static byte[] Serialize<T>(T data)
-    where T : class
+    where T : struct
 {
     return Encoding.UTF8.GetBytes(JsonSerializer.Serialize<T>(data));
 }
 
-class MarkedDatagram
+struct MarkedDatagram
 {
     public int id { get; set; }
     public byte[]? data { get; set; }
@@ -138,7 +147,7 @@ class MarkedDatagram
     }
 }
 
-class BaseInfo
+struct BaseInfo
 {
     public string filename { get; set; }
     public int udpPort { get; set; }

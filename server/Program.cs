@@ -39,11 +39,12 @@ List<byte> fileData = new List<byte>();
 
 TcpListener server = new TcpListener(IPAddress.Parse(IP), tcpPort);
 server.Start();
-Console.WriteLine("Waiting for connection");
-var tcpClient = server.AcceptTcpClient();
-Console.WriteLine("Connection established");
+
 while (true)
 {
+    Console.WriteLine("Waiting for connection");
+    var tcpClient = server.AcceptTcpClient();
+    Console.WriteLine("Connection established");
     NetworkStream stream = tcpClient.GetStream();
 
     //var bytesCount = stream.Read(buffer, 0, buffer.Length);
@@ -52,29 +53,29 @@ while (true)
 
     // Получаем отправленные на сервер данные
     // Loop to receive the data sent by the client.
-    while ((i = stream.Read(buffer, 0, buffer.Length)) != 0)
-    {
-        data += System.Text.Encoding.UTF8.GetString(buffer, 0, i);
-    }
+    i = stream.Read(buffer, 0, buffer.Length);
+    data += System.Text.Encoding.UTF8.GetString(buffer, 0, i);
 
-    Console.WriteLine(data);
     // парсинг полученных данных (в формате json для удобства)
     filename = JsonSerializer.Deserialize<BaseInfo>(data).filename;
     udpPort = JsonSerializer.Deserialize<BaseInfo>(data).udpPort;
 
-    Console.WriteLine($"Filename: {filename} udp port: {udpPort}");
     // Конечная точка и подключение
     IPEndPoint endPoint = new IPEndPoint(IPAddress.Any, 0);
     UdpClient udpClient = new UdpClient(udpPort);
+    var file = File.Open(filename, FileMode.Append);
+    stream.Write(BitConverter.GetBytes(123));
 
     while ((buffer = udpClient.Receive(ref endPoint)).Length != 0)
     {
         MarkedDatagram markedOne = JsonSerializer.Deserialize<MarkedDatagram>(Deserialize(buffer));
-        Console.WriteLine(DecodeBase64(markedOne.data));
-        //stream.Write(BitConverter.GetBytes(markedOne.id));
+        //Console.WriteLine(DecodeBase64(markedOne.data));
+        Console.WriteLine(markedOne.id);
+        stream.Write(BitConverter.GetBytes(markedOne.id));
+        //stream.Write(BitConverter.GetBytes(123));
+        file.Write(Encoding.UTF8.GetBytes(DecodeBase64(markedOne.data)));
     }
-
-    Console.WriteLine(fileData);
+    file.Close();
     try
     {
         
@@ -110,7 +111,7 @@ string DecodeBase64(string value)
     return Encoding.UTF8.GetString(valueBytes);
 }
 
-class MarkedDatagram
+struct MarkedDatagram
 {
     public int id { get; set; }
     public string data { get; set; }
@@ -122,7 +123,7 @@ class MarkedDatagram
     }
 }
 
-class BaseInfo
+struct BaseInfo
 {
     public string filename { get; set; }
     public int udpPort { get; set; }
