@@ -1,114 +1,117 @@
-﻿// See https://aka.ms/new-console-template for more information
-using System.Net;
-using System.Net.Sockets;
+﻿using System.Net.Sockets;
 using System.Text.Json;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Linq;
-using System.Runtime.Serialization.Formatters.Binary;
-using System.Threading.Tasks;
 
-const int DGRAM_DATA_SIZE = 16552;
 
-string IP = "127.0.0.1";
-int tcpPort = 44445;
-int udpPort = 44444;
-string filename = "megamozg.png";
-int timeout = 5000;
-// Данные из файла 
-// File data 
-byte[] data;
+const int DGRAM_DATA_SIZE = 32768;  // Размер данных, отправленных в датаграмме
 
-//try
-//{
-//    IP = args[0];
-//    tcpPort = Int32.Parse(args[1]);
-//    udpPort = Int32.Parse(args[2]);
-//    filename = args[3];
-//    timeout = Int32.Parse(args[4]);
+string IP;
+int tcpPort;
+int udpPort;
+string filename;
+int timeout;
 
-//    if (!File.Exists(filename))
-//    {
-//        Console.WriteLine("Specified file do not exists");
-//    }
+byte[] data; // Для данных, считанных из файла 
 
-//    // Проверка на опасные символы в пути/названии файла 
-//    // Check for dangerous symbols in filename/file path
-//    // ? , : " * > < |
-//    if (Regex.IsMatch(filename, "(|\\?|\\,|:|\"|\\*|>|<|\\||)"))
-//    {
-//        Console.WriteLine("Invalid filename or file path");
-//    }
-//}
-//catch
-//{
-//    Console.WriteLine("For the correct operation of the program\n" +
-//                    "the following arguments must be entered:\n" +
-//                    "1. IP\n" +
-//                    "2. TCP Port\n" +
-//                    "3. UDP Port\n" +
-//                    "4. Filename\n" +
-//                    "5. TCP connection timeout\n" +
-//                    "Execution aborted");
-//    return -1;
-//}
+try
+{
+    IP = args[0];
+    tcpPort = Int32.Parse(args[1]);
+    udpPort = Int32.Parse(args[2]);
+    filename = args[3];
+    timeout = Int32.Parse(args[4]);
+
+    if (!File.Exists(filename))
+    {
+        Console.WriteLine("Specified file do not exists");
+        return -1;
+    }
+
+    // Проверка на опасные символы в пути/названии файла 
+    // ? , : " * > < |
+    if (Regex.IsMatch(filename, "(|\\?|\\,|:|\"|\\*|>|<|\\||)"))
+    {
+        Console.WriteLine("Invalid filename or file path");
+        return -1;
+    }
+}
+catch
+{
+    Console.WriteLine("Error: Unrecognized or incomplete command line.\n\n" +
+                    "Using:\n" +
+                    "\t\tserver [IP] [TCP port] [UDP port] [Filename] [Timeout]\n" +
+                    "Execution aborted");
+    return -1;
+}
 
 
 
 // Установление соединения
-// Connection estblishing
 TcpClient tcpClient = new TcpClient(IP, tcpPort);
 UdpClient udpClient = new UdpClient(IP, udpPort);
-BaseInfo baseInfo = new BaseInfo(filename, udpPort);
-TimeSpan responeTime = TimeSpan.FromMilliseconds(timeout);
-MarkedDatagram markdgram;
 
+// Вспомогательные структуры
+MarkedDatagram markdgram; // нумерованная датаграмма для отправки на сервер
+BaseInfo baseInfo = new BaseInfo(filename, udpPort); // структура "название файла/UDP порт" для отправки на сервер
+TimeSpan responeTime = TimeSpan.FromMilliseconds(timeout); // время ожидания подтверждения отправки от сервера
+
+// Проверка подключения по tcp
 if (!tcpClient.Connected)
 {
     Console.WriteLine("No connection");
+    return -1;
 }
 
-var tcpStream = tcpClient.GetStream();
-var serializedBaseInfo = Serialize<BaseInfo>(baseInfo);
-byte[] serializedDatagram;
-byte[] buffer = new byte[DGRAM_DATA_SIZE];
 
+var tcpStream = tcpClient.GetStream(); // поток для связи с сервером
+var serializedBaseInfo = Serialize<BaseInfo>(baseInfo); // приведние структуры в массив байтов для отправки
+byte[] serializedDatagram; // представление нумерованной датаграммы в виде массива байтов
+
+// отправка названия файла и порта на сервер
+byte[] buffer = new byte[DGRAM_DATA_SIZE];
 tcpStream.Write(serializedBaseInfo);
 tcpStream.Read(buffer, 0, buffer.Length);
-// Отправка файла
-// File sending
-data = File.ReadAllBytes(filename); ;
-Console.WriteLine(Math.Floor((double)data.Length / DGRAM_DATA_SIZE));
-Console.WriteLine(Encoding.UTF8.GetString(buffer));
 
+// Запись файла в память
+data = File.ReadAllBytes(filename);
+
+
+// Выполняется для каждого блока данных
 for (int i = 0; i < Math.Ceiling((double)data.Length / DGRAM_DATA_SIZE); i++)
 {
+    // нумерация блока, перевод в байты и отправка на сервер по udp протоколу
     markdgram = new MarkedDatagram(i, data
                                         .Skip(i * DGRAM_DATA_SIZE)
                                         .Take(DGRAM_DATA_SIZE)
                                         .ToArray());
     serializedDatagram = Serialize<MarkedDatagram>(markdgram);
     udpClient.Send(serializedDatagram, serializedDatagram.Length);
-    Task<bool> sendingConfirmation = Task.Run(() => SendingConfirmation(i));
 
-    sendingConfirmation.Wait();
-    Console.WriteLine(sendingConfirmation.Result);
-    if (!sendingConfirmation.Wait(responeTime))
+    // Ожидание подтверждения $timeout ms
+    Task<bool> sendingConfirmation = Task.Run(() => SendingConfirmation(i));
+    if (!sendingConfirmation.Wait(responeTime)) // время отправки вышло
     {
+        Console.WriteLine($"Package #{i} delivery time out");
         i--;
         continue;
     }
-    if (!sendingConfirmation.Result)
+    if (!sendingConfirmation.Result) // Доставлен не тот пакет
     {
+        Console.WriteLine($"Wrong package was delivered #{i}");
         i--;
         continue;
     }
 }
 
+// отправка на сервер сообщения об окончании передачи, завершение работы
+tcpStream.Write(Encoding.UTF8.GetBytes("#end"));
+udpClient.Close();
 tcpStream.Close();
 tcpClient.Close();
 return 0;
 
+// Подтверждение полученной сервером датаграммы
 bool SendingConfirmation(int i)
 {
     byte[] buffer = new byte[DGRAM_DATA_SIZE];
@@ -120,16 +123,18 @@ bool SendingConfirmation(int i)
         return false;
 }
 
+// Структура -> json -> байты
 static byte[] Serialize<T>(T data)
     where T : struct
 {
     return Encoding.UTF8.GetBytes(JsonSerializer.Serialize<T>(data));
 }
 
+// нумерованная датаграмма
 struct MarkedDatagram
 {
     public int id { get; set; }
-    public byte[]? data { get; set; }
+    public byte[] data { get; set; }
 
     public MarkedDatagram(int id, byte[] data)
     {
@@ -138,6 +143,7 @@ struct MarkedDatagram
     }
 }
 
+// Название файла / порт
 struct BaseInfo
 {
     public string filename { get; set; }
