@@ -5,12 +5,12 @@ using System.Text.Json;
 
 const int DGRAM_DATA_SIZE = 32768; // Размер данных, отправленных в датаграмме
 
-string IP = "127.0.0.1";
-int tcpPort = 44445;
+string IP;
+int tcpPort;
 int udpPort;
-string path = "../";
+string path;
 string filename;
-string baseData = ""; // для данных полученных по tcp
+string baseData; // для данных полученных по tcp
 byte[] buffer = new byte[DGRAM_DATA_SIZE]; // буфер для udp пакетов
 List<MarkedDatagram> recievedDatagrams = new(); // спиок полученных датаграмм
 TimeSpan responeTime = TimeSpan.FromMilliseconds(1); // Время для слушалки конца передачи (IsEnd)
