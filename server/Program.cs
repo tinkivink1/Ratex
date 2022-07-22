@@ -67,7 +67,7 @@ while (true)
         // Loop to receive the data sent by the client.
         int recievedBytesQuantity = 0;
         recievedBytesQuantity = tcpStream.Read(buffer, 0, buffer.Length);
-        baseData += Encoding.UTF8.GetString(buffer, 0, recievedBytesQuantity);
+        baseData = Encoding.UTF8.GetString(buffer, 0, recievedBytesQuantity);
 
         // парсинг полученных данных
         filename = JsonSerializer.Deserialize<BaseInfo>(baseData).filename;
@@ -111,6 +111,7 @@ while (true)
     catch (JsonException) // Данные пришли в неправильном формате
     {
         Console.WriteLine("Recieved arguments does not match the required ones");
+        Console.WriteLine(Encoding.UTF8.GetString(buffer));
         return -1;
     }
     catch (SocketException) // Ошибка подключения

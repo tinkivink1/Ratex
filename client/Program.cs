@@ -27,14 +27,6 @@ try
         Console.WriteLine("Specified file do not exists");
         return -1;
     }
-
-    // Проверка на опасные символы в пути/названии файла 
-    // ? , : " * > < |
-    if (Regex.IsMatch(filename, "(|\\?|\\,|:|\"|\\*|>|<|\\||)"))
-    {
-        Console.WriteLine("Invalid filename or file path");
-        return -1;
-    }
 }
 catch
 {
@@ -109,6 +101,7 @@ tcpStream.Write(Encoding.UTF8.GetBytes("#end"));
 udpClient.Close();
 tcpStream.Close();
 tcpClient.Close();
+Console.WriteLine("Uploading completed successfully");
 return 0;
 
 // Подтверждение полученной сервером датаграммы
@@ -116,7 +109,7 @@ bool SendingConfirmation(int i)
 {
     byte[] buffer = new byte[DGRAM_DATA_SIZE];
     tcpStream.Read(buffer, 0, buffer.Length);
-    Console.WriteLine($"id:{BitConverter.ToInt32(buffer)}");
+    Console.WriteLine($"Package #{BitConverter.ToInt32(buffer)} has been sent");
     if (BitConverter.ToInt32(buffer) == i)
         return true;
     else
