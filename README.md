@@ -1,3 +1,2 @@
-# Ratex\
+# Ratex/.net 6.0
 
-.net 6.0 
