@@ -116,7 +116,7 @@ bool SendingConfirmation(int i)
         return false;
 }
 
-// Структура -> json -> байты
+// Преобразование Структура -> json -> байты
 static byte[] Serialize<T>(T data)
     where T : struct
 {
