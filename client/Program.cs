@@ -32,7 +32,7 @@ catch
 {
     Console.WriteLine("Error: Unrecognized or incomplete command line.\n\n" +
                     "Using:\n" +
-                    "\t\tserver [IP] [TCP port] [UDP port] [Filename] [Timeout]\n" +
+                    "\t\tclient [IP] [TCP port] [UDP port] [Filename] [Timeout]\n" +
                     "Execution aborted");
     return -1;
 }
