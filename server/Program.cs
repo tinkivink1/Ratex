@@ -52,6 +52,7 @@ TcpClient tcpClient = new TcpClient(); // клиент, на который бу
 IPEndPoint endPoint = new IPEndPoint(IPAddress.Any, 0); // конечная точка - для прослушивания udp
 UdpClient udpClient = new UdpClient(); // udp клиент
 
+
 while (true)
 {
     try
@@ -72,28 +73,29 @@ while (true)
         // парсинг полученных данных
         filename = JsonSerializer.Deserialize<BaseInfo>(baseData).filename;
         udpPort = JsonSerializer.Deserialize<BaseInfo>(baseData).udpPort;
-        tcpStream.Write(Encoding.UTF8.GetBytes($"Server received filename: {filename} and UDP port: {udpPort}"));
-
         // Конечная точка и подключение
-        endPoint = new IPEndPoint(IPAddress.Any, 0);
-        udpClient = new UdpClient(udpPort);
-
+        udpClient = new UdpClient();
+        udpClient.Connect(IP, udpPort);
+        endPoint = new IPEndPoint(IPAddress.Parse(IP), udpPort);
+        tcpStream.Write(Encoding.UTF8.GetBytes($"{((IPEndPoint)udpClient.Client.LocalEndPoint).Port}"));
         // Слушалка #end сообщения
         // #end означает конец передачи
         Task<bool> IsEndTask = Task.Run(() => IsEnd(tcpStream));
 
+        Console.WriteLine($"Local: {((IPEndPoint)udpClient.Client.LocalEndPoint).Port}");
+        Console.WriteLine($"Remote: {((IPEndPoint)udpClient.Client.RemoteEndPoint).Port}");
         // Выполнять пока не получено сообщение об окончании
         while (!IsEndTask.Wait(responeTime))
         {
             buffer = udpClient.Receive(ref endPoint);
             MarkedDatagram markedOne = JsonSerializer.Deserialize<MarkedDatagram>(buffer);
-            Console.WriteLine($"Server recieved packet #{markedOne.id}");
+            //Console.WriteLine($"Server recieved packet #{markedOne.id}");
             // Проверка: содержится ли в списке датаграмма с таким же id?   
             if (!(recievedDatagrams
                 .Where(item => item.id == markedOne.id)
                 .Count() != 0))
             {
-                Console.WriteLine($"Packet #{markedOne.id} has been written");
+                //Console.WriteLine($"Packet #{markedOne.id} has been written");
                 recievedDatagrams.Add(markedOne); // записываем датаграмму в память (список)
             }
             tcpStream.Write(BitConverter.GetBytes(markedOne.id)); // отправляем подтверждение получения пакета на клиент

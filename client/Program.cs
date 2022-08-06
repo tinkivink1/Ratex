@@ -2,7 +2,7 @@
 using System.Text.Json;
 using System.Text;
 using System.Text.RegularExpressions;
-
+using System.Net;
 
 const int DGRAM_DATA_SIZE = 32768;  // Размер данных, отправленных в датаграмме
 
@@ -41,7 +41,8 @@ catch
 
 // Установление соединения
 TcpClient tcpClient = new TcpClient(IP, tcpPort);
-UdpClient udpClient = new UdpClient(IP, udpPort);
+UdpClient udpClient = new UdpClient(udpPort);
+
 
 // Вспомогательные структуры
 MarkedDatagram markdgram; // нумерованная датаграмма для отправки на сервер
@@ -65,6 +66,10 @@ byte[] buffer = new byte[DGRAM_DATA_SIZE];
 tcpStream.Write(serializedBaseInfo);
 tcpStream.Read(buffer, 0, buffer.Length);
 
+udpClient.Connect(IP, int.Parse(Encoding.UTF8.GetString(buffer)));
+
+Console.WriteLine($"Local: {((IPEndPoint)udpClient.Client.LocalEndPoint).Port}");
+Console.WriteLine($"Remote: {((IPEndPoint)udpClient.Client.RemoteEndPoint).Port}");
 // Запись файла в память
 data = File.ReadAllBytes(filename);
 
@@ -84,7 +89,7 @@ for (int i = 0; i < Math.Ceiling((double)data.Length / DGRAM_DATA_SIZE); i++)
     Task<bool> sendingConfirmation = Task.Run(() => SendingConfirmation(i));
     if (!sendingConfirmation.Wait(responeTime)) // время отправки вышло
     {
-        Console.WriteLine($"Package #{i} delivery time out");
+        //Console.WriteLine($"Package #{i} delivery time out");
         i--;
         continue;
     }
@@ -109,7 +114,7 @@ bool SendingConfirmation(int i)
 {
     byte[] buffer = new byte[DGRAM_DATA_SIZE];
     tcpStream.Read(buffer, 0, buffer.Length);
-    Console.WriteLine($"Package #{BitConverter.ToInt32(buffer)} has been sent");
+    //Console.WriteLine($"Package #{BitConverter.ToInt32(buffer)} has been sent");
     if (BitConverter.ToInt32(buffer) == i)
         return true;
     else
